@@ -43,7 +43,6 @@ class LogWriter(file: File) {
   }
 
   def append(bytes: Array[Byte]) = {
-    println(encode(bytes))
     channel.write(encode(bytes))
     currentOffset += 1
   }

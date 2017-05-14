@@ -1,9 +1,9 @@
-package io.github.ebezzi
+package io.github.ebezzi.legacy
 
-import akka.actor.{ActorSystem, Props}
+import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl._
 import akka.stream.scaladsl.Tcp._
+import akka.stream.scaladsl._
 import akka.util.ByteString
 
 import scala.concurrent.Future

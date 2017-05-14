@@ -1,9 +1,9 @@
-package io.github.ebezzi
+package io.github.ebezzi.legacy
 
-import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
-import akka.io.{IO, Tcp}
-import akka.util.ByteString
 import java.net.InetSocketAddress
+
+import akka.actor.{Actor, ActorLogging, ActorSystem, Props}
+import akka.io.{IO, Tcp}
 
 class Server2 extends Actor with ActorLogging {
 
@@ -20,14 +20,14 @@ class Server2 extends Actor with ActorLogging {
       context stop self
 
     case c @ Connected(remote, local) =>
-      val handler = context.actorOf(Props[SimplisticHandler])
+      val handler = context.actorOf(Props[Handler])
       val connection = sender()
       connection ! Register(handler)
   }
 
 }
 
-class SimplisticHandler extends Actor {
+class Handler extends Actor {
   import Tcp._
   def receive = {
     case Received(data) => sender() ! Write(data)

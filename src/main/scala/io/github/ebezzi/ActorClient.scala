@@ -70,18 +70,28 @@ class ActorClient(listener: ActorRef) extends Actor with ActorLogging {
 
 }
 
-sealed trait Protocol
 
-case class RegisterConsumer(consumerId: Int) extends Protocol
-
-case class CommitOffset(offset: Long) extends Protocol
 
 object Protocol {
+
+  sealed trait Protocol
+
+  // Registers a consumer
+  case class RegisterConsumer(consumerId: Int) extends Protocol
+
+  // Commits the offset for consumerId `consumerId`. Will not retrieve new data
+  case class CommitOffset(consumerId: Int, offset: Long) extends Protocol
+
+  // Polls for the next record(s). TODO: for now we use only one record at a time
+  case class Poll(consumerId: Int, offset: Long) extends Protocol
+
+  case class PublishRecord(data: Array[Byte])
 
   implicit val byteOrder = ByteOrder.BIG_ENDIAN
 
   val RegisterConsumerMagic = 0.toByte
   val CommitOffsetMagic = 1.toByte
+  val PollMagic = 2.toByte
 
   def registerConsumer(consumerId: Int) =
     new ByteStringBuilder()
@@ -89,9 +99,17 @@ object Protocol {
       .putInt(consumerId)
       .result()
 
-  def commitOffset(offset: Long) =
+  def commitOffset(consumerId: Int, offset: Long) =
     new ByteStringBuilder()
       .putByte(CommitOffsetMagic)
+      .putInt(consumerId)
+      .putLong(offset)
+      .result()
+
+  def poll(consumerId: Int, offset: Long) =
+    new ByteStringBuilder()
+      .putByte(PollMagic)
+      .putInt(consumerId)
       .putLong(offset)
       .result()
 
@@ -100,7 +118,8 @@ object Protocol {
     val magic = buffer.get()
     magic match {
       case `RegisterConsumerMagic` => Some(RegisterConsumer(buffer.getInt()))
-      case `CommitOffsetMagic` => Some(CommitOffset(buffer.getLong()))
+      case `CommitOffsetMagic` => Some(CommitOffset(buffer.getInt(), buffer.getLong()))
+      case `PollMagic` => Some(Poll(buffer.getInt(), buffer.getLong()))
       case otherwise => None
     }
   }

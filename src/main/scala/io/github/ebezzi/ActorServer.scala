@@ -28,20 +28,22 @@ class ActorServer extends Actor with ActorLogging {
 
     case c @ Connected(remote, local) =>
       log.info("Received connection from: {}", remote)
-      val handler = context.actorOf(Props[SimplisticHandler])
+      val handler = context.actorOf(Props[ConsumerHandler])
       val connection = sender()
       connection ! Register(handler)
   }
 
 }
 
-class SimplisticHandler extends Actor with ActorLogging {
+class ConsumerHandler extends Actor with ActorLogging {
   import Tcp._
+  import Protocol._
 
   val file = new File("00000.dat")
   val reader = new LogReader(file)
 //  val writer = new LogWriter(file)
 
+  // TODO: this should be saved to a database
   var lastCommittedOffset = -1L
 
   def receive = {

@@ -1,12 +1,13 @@
-package io.github.ebezzi
+package io.github.ebezzi.legacy
 
 import java.io.File
 
 import akka.actor.ActorSystem
-import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
-import akka.stream.scaladsl.{Flow, Source, Tcp}
 import akka.stream.scaladsl.Tcp.{IncomingConnection, ServerBinding}
+import akka.stream.scaladsl.{Flow, Source, Tcp}
+import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
 import akka.util.ByteString
+import io.github.ebezzi.LogReader
 
 import scala.concurrent.Future
 

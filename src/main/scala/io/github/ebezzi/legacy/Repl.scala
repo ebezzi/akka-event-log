@@ -1,4 +1,4 @@
-package io.github.ebezzi
+package io.github.ebezzi.legacy
 
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
