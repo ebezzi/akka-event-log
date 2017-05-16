@@ -41,34 +41,38 @@ class ConsumerHandler extends Actor with ActorLogging {
 
   val file = new File("00000.dat")
   val reader = new LogReader(file)
-//  val writer = new LogWriter(file)
+  val writer = new LogWriter(file)
 
   // TODO: this should be saved to a database
-  var lastCommittedOffset = -1L
+  var lastCommittedOffset = 0L
 
   def receive = {
     case Received(data) =>
-
-      log.info("Received data: {}", data)
-
       Protocol.decode(data) match {
+
         case Some(RegisterConsumer(consumerId)) =>
           log.info("{} registered", consumerId)
           // TODO: match the consumerId and get the right partition (for now, assume offset is 0)
-          val toSend = reader.next()
-          sender ! Write(ProtocolFraming.encode(ServerProtocol.record(0L, toSend)))
-          log.info("Consumer initializing")
 
-        case Some(CommitOffset(offset)) =>
+        case Some(CommitOffset(consumerId, offset)) =>
+          log.info("Received commit from consumerId {}", consumerId)
           lastCommittedOffset = offset
-          val toSend = reader.next()
+          sender ! Write(ProtocolFraming.encode(ServerProtocol.commitAck))
+
+        case Some(Poll(consumerId)) =>
+          log.info("Received poll from consumerId {}", consumerId)
+          val toSend = reader.fromPosition(lastCommittedOffset)
           if (toSend.nonEmpty){
             sender ! Write(ProtocolFraming.encode(ServerProtocol.record(1 + lastCommittedOffset, toSend)))
-            log.info("Sending {} bytes to the consumer with offset {}" , toSend.length, 1 + lastCommittedOffset)
+//            log.info("Sending {} bytes to the consumer with offset {}" , toSend.length, 1 + lastCommittedOffset)
           } else {
             sender ! Write(ProtocolFraming.encode(ServerProtocol.record(lastCommittedOffset, toSend)))
-            log.info("Sending empty response to the consumer")
+//            log.info("Sending empty response to the consumer")
           }
+
+        case Some(PublishData(data)) =>
+          log.info("Publishing: {}", data.length)
+          writer.append(data)
       }
 
     case PeerClosed =>
@@ -82,18 +86,25 @@ sealed trait ServerProtocol
 case class Record(offset: Long, data: Array[Byte]) extends ServerProtocol {
   override def toString: String = s"Record($offset, ${new String(data)})"
 }
+case object CommitAck extends ServerProtocol
 
 object ServerProtocol {
 
   implicit val byteOrder = ByteOrder.BIG_ENDIAN
 
   val SendDataMagic = 0.toByte
+  val CommitAckMagic = 1.toByte
 
   def record(offset: Long, data: Array[Byte]) =
     new ByteStringBuilder()
       .putByte(SendDataMagic)
       .putLong(offset)
       .putBytes(data)
+      .result()
+
+  def commitAck =
+    new ByteStringBuilder()
+      .putByte(CommitAckMagic)
       .result()
 
   def decode(bs: ByteString): Option[ServerProtocol] = {
@@ -106,6 +117,8 @@ object ServerProtocol {
         val data: Array[Byte] = new Array(buffer.remaining())
         buffer.get(data)
         Some(Record(offset, data))
+      case `CommitAckMagic` =>
+        Some(CommitAck)
 
       case otherwise =>
         None

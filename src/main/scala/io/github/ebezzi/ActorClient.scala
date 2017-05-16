@@ -10,10 +10,13 @@ import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Source
 import akka.util.{ByteString, ByteStringBuilder}
 
+// These messages are supposed to be mapped to function calls (to hide the actor behind it)
 sealed trait Message
 case class Commit(offset: Long) extends Message
+case class Publish(data: Array[Byte]) extends Message
+case object Poll extends Message
 
-class ActorClient(listener: ActorRef) extends Actor with ActorLogging {
+class ActorClient extends Actor with ActorLogging {
 
   val remote = new InetSocketAddress("localhost", 7777)
 
@@ -26,11 +29,9 @@ class ActorClient(listener: ActorRef) extends Actor with ActorLogging {
 
   def receive = {
     case CommandFailed(_: Connect) =>
-      //      listener ! "connect failed"
       context stop self
 
-    case c@Connected(remote, local) =>
-      //      listener ! c
+    case Connected(remote, local) =>
       val connection = sender()
       connection ! Register(self)
 
@@ -39,37 +40,57 @@ class ActorClient(listener: ActorRef) extends Actor with ActorLogging {
       connection ! Write(ProtocolFraming.encode(Protocol.registerConsumer(consumerId)))
 
       context become connected(connection)
+
+    case other =>
+      log.warning(s"Unexpected $other")
   }
 
   def connected(connection: ActorRef): Receive = {
 
-    //    case data: ByteString =>
-    //      connection ! Write(data)
-
     case Commit(offset) =>
-      connection ! Write(ProtocolFraming.encode(Protocol.commitOffset(offset)))
+      connection ! Write(ProtocolFraming.encode(Protocol.commitOffset(consumerId, offset)))
+      context become waitingForResponse(connection, sender)
+
+    case Poll =>
+      log.info("Sending poll...")
+      connection ! Write(ProtocolFraming.encode(Protocol.poll(consumerId)))
+      context become waitingForResponse(connection, sender)
+
+    case Publish(data) =>
+      connection ! Write(ProtocolFraming.encode(Protocol.publishData(data)))
+      context become waitingForResponse(connection, sender)
 
     case CommandFailed(w: Write) =>
-    // O/S buffer was full
-    //          listener ! "write failed"
-
-    case Received(data) =>
-      //      listener ! data
-      //      log.info("Received {}", data.decodeString("utf-8"))
-      ServerProtocol.decode(data) match {
-        case Some(r: Record) => listener ! r
-      }
-
-    case "close" =>
-      connection ! Close
+      println("whatever")
+      // TODO: analyze this case according to the docs
 
     case _: ConnectionClosed =>
       //          listener ! "connection closed"
       context stop self
+
+    case other =>
+      log.warning(s"Received unexpected $other")
+  }
+
+  def waitingForResponse(connection: ActorRef, requestor: ActorRef): Receive = {
+    case Received(data) =>
+      log.warning("Received {}", data.decodeString("utf-8"))
+      ServerProtocol.decode(data) match {
+        case Some(msg) =>
+          requestor ! msg
+        // TODO: what if we cannot decode any data? probably we need to do some buffering
+      }
+      context become connected(connection)
   }
 
 }
 
+/*
+  Flow of commands:
+  - Poll -> Record
+  - Publish -> PublishAck
+  - Commit -> CommitAck
+ */
 
 
 object Protocol {
@@ -83,15 +104,16 @@ object Protocol {
   case class CommitOffset(consumerId: Int, offset: Long) extends Protocol
 
   // Polls for the next record(s). TODO: for now we use only one record at a time
-  case class Poll(consumerId: Int, offset: Long) extends Protocol
+  case class Poll(consumerId: Int) extends Protocol
 
-  case class PublishRecord(data: Array[Byte])
+  case class PublishData(data: Array[Byte]) extends Protocol
 
   implicit val byteOrder = ByteOrder.BIG_ENDIAN
 
   val RegisterConsumerMagic = 0.toByte
   val CommitOffsetMagic = 1.toByte
   val PollMagic = 2.toByte
+  val PublishDataMagic = 3.toByte
 
   def registerConsumer(consumerId: Int) =
     new ByteStringBuilder()
@@ -106,20 +128,34 @@ object Protocol {
       .putLong(offset)
       .result()
 
-  def poll(consumerId: Int, offset: Long) =
+  def poll(consumerId: Int) =
     new ByteStringBuilder()
       .putByte(PollMagic)
       .putInt(consumerId)
-      .putLong(offset)
+      .result()
+
+  def publishData(data: Array[Byte]) =
+    new ByteStringBuilder()
+      .putByte(PublishDataMagic)
+      .putInt(data.length)
+      .putBytes(data)
       .result()
 
   def decode(bs: ByteString): Option[Protocol] = {
     val buffer = bs.toByteBuffer
     val magic = buffer.get()
     magic match {
-      case `RegisterConsumerMagic` => Some(RegisterConsumer(buffer.getInt()))
-      case `CommitOffsetMagic` => Some(CommitOffset(buffer.getInt(), buffer.getLong()))
-      case `PollMagic` => Some(Poll(buffer.getInt(), buffer.getLong()))
+      case `RegisterConsumerMagic` =>
+        Some(RegisterConsumer(buffer.getInt()))
+      case `CommitOffsetMagic` =>
+        Some(CommitOffset(buffer.getInt(), buffer.getLong()))
+      case `PollMagic` =>
+        Some(Poll(buffer.getInt()))
+      case `PublishDataMagic` =>
+        val size = buffer.getInt()
+        var dst = Array.ofDim[Byte](size)
+        buffer.get(dst)
+        Some(PublishData(dst))
       case otherwise => None
     }
   }
@@ -147,61 +183,14 @@ object ProtocolFraming {
 
 }
 
-//object ProtocolFraming {
-//
-//  implicit val byteOrder = ByteOrder.LITTLE_ENDIAN
-//
-//  def encode(i: Int): ByteString =
-//    encode(ByteString.fromInts(i))
-//
-//  def encode(s: String): ByteString =
-//    encode(ByteString.fromString(s))
-//
-//  def encode(ba: Array[Byte]): ByteString =
-//    encode(ByteString.fromArray(ba))
-//
-//  def encode(bs: ByteString): ByteString =
-//    new ByteStringBuilder()
-//      .putInt(bs.length)
-//      .append(bs)
-//      .result()
-//
-//  def decode(bs: ByteString) =
-//    bs.drop(4)
-//
-//}
-
 class JustLogActor extends Actor with ActorLogging {
   override def receive: Receive = {
     case msg => log.info("Received: {}", msg)
   }
 }
 
-class ConsumerActor extends Actor with ActorLogging {
 
-  val client = context.actorOf(Props(new ActorClient(self)))
-
-  override def receive: Receive = {
-    case record@Record(offset, data) =>
-      log.info("Consumed: {}", record)
-      // TODO: we need a poll command, because we need to commit the offset as soon as possible, but wait to poll new data
-      Thread.sleep(1000)
-      client ! Commit(offset)
-  }
-
-}
 
 object ActorClient extends App {
-
-  import scala.concurrent.duration._
-
-  val system = ActorSystem("consumer")
-  import system.dispatcher
-
-//  val logger = system.actorOf(Props(new JustLogActor))
-//  val client = system.actorOf(Props(new ActorClient(logger)))
-
-  val actor = system.actorOf(Props(new ConsumerActor))
-
-
+  def props = Props(new ActorClient)
 }

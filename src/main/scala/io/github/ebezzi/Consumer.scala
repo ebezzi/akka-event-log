@@ -2,71 +2,49 @@ package io.github.ebezzi
 
 import java.io.File
 import java.nio.ByteOrder
+import java.nio.charset.Charset
 
-import akka.actor.ActorSystem
+import akka.actor.{Actor, ActorLogging, ActorSystem, Props}
 import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
 import akka.stream.scaladsl.{Flow, Framing, Sink, Source, Tcp}
-import akka.util.{ByteString, ByteStringBuilder}
+import akka.util.{ByteString, ByteStringBuilder, Timeout}
 
-import scala.concurrent.Future
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration._
+import akka.pattern.ask
 
-/**
-  * Created by emanuele on 31/12/16.
-  */
 object Consumer extends App {
 
-  new Consumer
+  implicit val system = ActorSystem("consumer")
+  val consumer = new Consumer
+  import system.log
+
+  while (true) {
+    Thread.sleep(500)
+    val record = consumer.poll()
+    log.info("Consumed record: {}", record)
+//    consumer.commit(record)
+//    log.info("Committed record: {}", record)
+  }
 
 }
 
-class Consumer {
+class Consumer(implicit val system: ActorSystem) {
 
-  implicit val system = ActorSystem("consumer")
-  val decider: Supervision.Decider = { e =>
-    e.printStackTrace()
-    Supervision.Stop
-  }
-
-  val materializerSettings = ActorMaterializerSettings(system).withSupervisionStrategy(decider)
-  implicit val materializer = ActorMaterializer(materializerSettings)(system)
-
+  implicit val timeout = Timeout(10.seconds)
   import system.dispatcher
-
-  val connection = Tcp().outgoingConnection("127.0.0.1", 7777)
 
   implicit val byteOrder = ByteOrder.LITTLE_ENDIAN
 
-  def encode(ba: Array[Byte]) =
-    new ByteStringBuilder()
-      .putInt(ba.length)
-      .putBytes(ba)
-      .result()
+  val client = system.actorOf(ActorClient.props)
 
-  def send(ba: Array[Byte]): Future[ByteString] =
-    Source.single(ba)
-      .map(encode)
-      .via(connection)
-      .runWith(Sink.head)
+  def pollAsync(): Future[Record] =
+    (client ? Poll).mapTo[Record]
 
-  //  val initial = Source.single()
+  def poll(): Record =
+    Await.result((client ? Poll).mapTo[Record], 10.seconds)
 
-//  val flow = Flow[ByteString]
-//    //    .via(Framing.lengthField(4, maximumFrameLength = Int.MaxValue))
-//    .map { x => println(x); x } // prints the offset
-//    .map(_.drop(4))
-//    .map { x => println(x.decodeString("utf-8")); x }
-//    .merge(Source.single(encode(Array[Byte](0, 0, 0, 0)))) // prints the offset
-//
-//
-//  connection.join(flow).run()
-//    .foreach { e =>
-//    send(Array[Byte](0, 0, 0, 0))
-//  }
-
-  send(Array[Byte](0, 0, 0, 0)).foreach(println)
-//  send(Array[Byte](0, 0, 0, 1)).foreach(println)
-//  send(Array[Byte](0, 0, 0, 2)).foreach(println)
-//  send(Array[Byte](0, 0, 0, 3)).foreach(println)
-
+  def commit(record: Record): Unit =
+    Await.result(client ? Commit(record.offset), 10.seconds)
 
 }

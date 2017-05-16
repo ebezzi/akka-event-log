@@ -107,6 +107,29 @@ final class LogReader(file: File) {
     buffer.array()
   }
 
+  private def readBytes(record: Record): Array[Byte] = {
+    val buffer = ByteBuffer.allocate(record.size)
+    println(s"*** $position")
+    channel.read(buffer, 12 + position)
+    buffer.array()
+  }
+
+  def fromPosition(pos: Long): Array[Byte] = {
+    println(s"Position $position, requested $pos")
+    val record = read()
+    record match {
+      case record @ Record(`pos`, _) =>
+        readBytes(record)
+      case Record(-1, _) =>
+        Array.empty[Byte]
+      case record =>
+        println(s"Moving to $pos")
+        moveTo(pos)
+        readBytes(record)
+    }
+
+  }
+
   def close() = {
     channel.close()
     raf.close()
