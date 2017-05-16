@@ -114,18 +114,18 @@ final class LogReader(file: File) {
     buffer.array()
   }
 
-  def fromPosition(pos: Long): Array[Byte] = {
-    println(s"Position $position, requested $pos")
+  def fromOffset(offset: Long): Array[Byte] = {
+    println(s"Position $position, requested $offset")
     val record = read()
     record match {
-      case record @ Record(`pos`, _) =>
+      case record @ Record(`offset`, _) =>
         readBytes(record)
       case Record(-1, _) =>
         Array.empty[Byte]
       case record =>
-        println(s"Moving to $pos")
-        moveTo(pos)
-        readBytes(record)
+        println(s"Moving to $offset")
+        moveTo(offset)
+        readBytes(read())
     }
 
   }

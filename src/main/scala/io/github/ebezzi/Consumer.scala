@@ -23,8 +23,8 @@ object Consumer extends App {
     Thread.sleep(500)
     val record = consumer.poll()
     log.info("Consumed record: {}", record)
-//    consumer.commit(record)
-//    log.info("Committed record: {}", record)
+    consumer.commit(record)
+    log.info("Committed record: {}", record)
   }
 
 }

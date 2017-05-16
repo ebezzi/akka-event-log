@@ -56,19 +56,14 @@ class ConsumerHandler extends Actor with ActorLogging {
 
         case Some(CommitOffset(consumerId, offset)) =>
           log.info("Received commit from consumerId {}", consumerId)
-          lastCommittedOffset = offset
+          lastCommittedOffset = 1+offset
           sender ! Write(ProtocolFraming.encode(ServerProtocol.commitAck))
 
         case Some(Poll(consumerId)) =>
           log.info("Received poll from consumerId {}", consumerId)
-          val toSend = reader.fromPosition(lastCommittedOffset)
-          if (toSend.nonEmpty){
-            sender ! Write(ProtocolFraming.encode(ServerProtocol.record(1 + lastCommittedOffset, toSend)))
-//            log.info("Sending {} bytes to the consumer with offset {}" , toSend.length, 1 + lastCommittedOffset)
-          } else {
-            sender ! Write(ProtocolFraming.encode(ServerProtocol.record(lastCommittedOffset, toSend)))
-//            log.info("Sending empty response to the consumer")
-          }
+          val toSend = reader.fromOffset(lastCommittedOffset)
+          log.warning("Polled record: {}", new String(toSend, "utf-8"))
+          sender ! Write(ProtocolFraming.encode(ServerProtocol.record(lastCommittedOffset, toSend)))
 
         case Some(PublishData(data)) =>
           log.info("Publishing: {}", data.length)
