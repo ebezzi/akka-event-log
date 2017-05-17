@@ -6,21 +6,23 @@ import java.nio.charset.Charset
 import akka.actor.{Actor, ActorLogging, ActorSystem, Props}
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source, Tcp}
-import akka.util.{ByteString, ByteStringBuilder}
+import akka.util.{ByteString, ByteStringBuilder, Timeout}
 import io.github.ebezzi.Producer.system
+
 import scala.concurrent.duration._
-
 import scala.concurrent.Future
+import akka.pattern.ask
 
 
-class Producer(implicit val system: ActorSystem, mat: ActorMaterializer) {
+class Producer(implicit val system: ActorSystem) {
 
-  implicit val byteOrder = ByteOrder.LITTLE_ENDIAN
+  implicit val timeout = Timeout(10.seconds)
+  import system.dispatcher
 
   val client = system.actorOf(ActorClient.props)
 
   def produce(data: String) =
-    client ! Publish(data.getBytes(Charset.defaultCharset()))
+    client ? Publish(data.getBytes(Charset.defaultCharset()))
 
 }
 

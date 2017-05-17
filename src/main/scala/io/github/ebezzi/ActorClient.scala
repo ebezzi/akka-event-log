@@ -4,7 +4,7 @@ import java.net.InetSocketAddress
 import java.nio.ByteOrder
 
 import akka.actor.Actor.Receive
-import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, Stash}
 import akka.io.{IO, Tcp}
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Source
@@ -16,7 +16,7 @@ case class Commit(offset: Long) extends Message
 case class Publish(data: Array[Byte]) extends Message
 case object Poll extends Message
 
-class ActorClient extends Actor with ActorLogging {
+class ActorClient extends Actor with ActorLogging with Stash {
 
   val remote = new InetSocketAddress("localhost", 7777)
 
@@ -39,10 +39,14 @@ class ActorClient extends Actor with ActorLogging {
 
       connection ! Write(ProtocolFraming.encode(Protocol.registerConsumer(consumerId)))
 
+      log.info("Unstashing all")
+      unstashAll()
+
       context become connected(connection)
 
     case other =>
-      log.warning(s"Unexpected $other")
+      log.info("Stashing {}", other)
+      stash()
   }
 
   def connected(connection: ActorRef): Receive = {
@@ -52,11 +56,11 @@ class ActorClient extends Actor with ActorLogging {
       context become waitingForResponse(connection, sender)
 
     case Poll =>
-      log.info("Sending poll...")
       connection ! Write(ProtocolFraming.encode(Protocol.poll(consumerId)))
       context become waitingForResponse(connection, sender)
 
     case Publish(data) =>
+      log.info("Publishing {} bytes", data.length)
       connection ! Write(ProtocolFraming.encode(Protocol.publishData(data)))
       context become waitingForResponse(connection, sender)
 
@@ -74,7 +78,7 @@ class ActorClient extends Actor with ActorLogging {
 
   def waitingForResponse(connection: ActorRef, requestor: ActorRef): Receive = {
     case Received(data) =>
-      log.warning("Received {}", data.decodeString("utf-8"))
+      log.debug("Received {}", data.decodeString("utf-8"))
       ServerProtocol.decode(data) match {
         case Some(msg) =>
           requestor ! msg

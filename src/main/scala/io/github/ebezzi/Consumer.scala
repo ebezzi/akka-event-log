@@ -19,12 +19,14 @@ object Consumer extends App {
   val consumer = new Consumer
   import system.log
 
+//  Thread.sleep(1000)
+
   while (true) {
-    Thread.sleep(500)
     val record = consumer.poll()
-    log.info("Consumed record: {}", record)
+    if (record.data.nonEmpty)
+      log.info("Consumed record: {}", record)
     consumer.commit(record)
-    log.info("Committed record: {}", record)
+    Thread.sleep(100)
   }
 
 }
@@ -45,6 +47,6 @@ class Consumer(implicit val system: ActorSystem) {
     Await.result((client ? Poll).mapTo[Record], 10.seconds)
 
   def commit(record: Record): Unit =
-    Await.result(client ? Commit(record.offset), 10.seconds)
+    if (record.data.isEmpty) () else Await.result(client ? Commit(record.offset), 10.seconds)
 
 }

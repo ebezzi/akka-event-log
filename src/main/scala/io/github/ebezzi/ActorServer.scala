@@ -43,6 +43,10 @@ class ConsumerHandler extends Actor with ActorLogging {
   val reader = new LogReader(file)
   val writer = new LogWriter(file)
 
+  val offsetStorage = new File("offsets.dat")
+  val offsetManagerReader = new LogReader(offsetStorage)
+  val offsetManagerWriter = new LogWriter(offsetStorage)
+
   // TODO: this should be saved to a database
   var lastCommittedOffset = 0L
 
@@ -68,6 +72,7 @@ class ConsumerHandler extends Actor with ActorLogging {
         case Some(PublishData(data)) =>
           log.info("Publishing: {}", data.length)
           writer.append(data)
+          sender ! Write(ProtocolFraming.encode(ServerProtocol.writeAck))
       }
 
     case PeerClosed =>
@@ -82,6 +87,7 @@ case class Record(offset: Long, data: Array[Byte]) extends ServerProtocol {
   override def toString: String = s"Record($offset, ${new String(data)})"
 }
 case object CommitAck extends ServerProtocol
+case object WriteAck extends ServerProtocol
 
 object ServerProtocol {
 
@@ -89,6 +95,7 @@ object ServerProtocol {
 
   val SendDataMagic = 0.toByte
   val CommitAckMagic = 1.toByte
+  val WriteAckMagic = 2.toByte
 
   def record(offset: Long, data: Array[Byte]) =
     new ByteStringBuilder()
@@ -100,6 +107,11 @@ object ServerProtocol {
   def commitAck =
     new ByteStringBuilder()
       .putByte(CommitAckMagic)
+      .result()
+
+  def writeAck =
+    new ByteStringBuilder()
+      .putByte(WriteAckMagic)
       .result()
 
   def decode(bs: ByteString): Option[ServerProtocol] = {
@@ -114,6 +126,8 @@ object ServerProtocol {
         Some(Record(offset, data))
       case `CommitAckMagic` =>
         Some(CommitAck)
+      case `WriteAckMagic` =>
+        Some(WriteAck)
 
       case otherwise =>
         None

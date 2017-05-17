@@ -109,7 +109,6 @@ final class LogReader(file: File) {
 
   private def readBytes(record: Record): Array[Byte] = {
     val buffer = ByteBuffer.allocate(record.size)
-    println(s"*** $position")
     channel.read(buffer, 12 + position)
     buffer.array()
   }
