@@ -89,7 +89,8 @@ class Handler extends Actor with ActorLogging {
 object ActorServer extends App {
 
   val system = ActorSystem("test-system")
-  system.actorOf(Props(new ActorServer))
+//  system.actorOf(Props(new ActorServer))
+  system.actorOf(Props(new SimpleClusterListener))
 
 }
 
