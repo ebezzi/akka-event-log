@@ -5,19 +5,20 @@ import java.net.InetSocketAddress
 import java.nio.ByteOrder
 
 import akka.actor.{Actor, ActorLogging, ActorSystem, Props}
+import akka.cluster.Cluster
 import akka.io.{IO, Tcp}
 import akka.io.Tcp._
 import akka.util.{ByteString, ByteStringBuilder}
 
-/**
-  * Created by emanuele on 06/01/17.
-  */
 class ActorServer extends Actor with ActorLogging {
 
   import Tcp._
   import context.system
 
-  IO(Tcp) ! Bind(self, new InetSocketAddress("localhost", 7777))
+  private val port =
+    context.system.settings.config.getInt("server.tcp.port")
+
+  IO(Tcp) ! Bind(self, new InetSocketAddress("localhost", port))
 
   def receive = {
     case b @ Bound(localAddress) =>
@@ -28,26 +29,28 @@ class ActorServer extends Actor with ActorLogging {
 
     case c @ Connected(remote, local) =>
       log.info("Received connection from: {}", remote)
-      val handler = context.actorOf(Props[ConsumerHandler])
+      val handler = context.actorOf(Props[Handler])
       val connection = sender()
       connection ! Register(handler)
   }
 
 }
 
-class ConsumerHandler extends Actor with ActorLogging {
+class Handler extends Actor with ActorLogging {
   import Tcp._
   import Protocol._
+
+  val cluster = Cluster(context.system)
 
   val file = new File("00000.dat")
   val reader = new LogReader(file)
   val writer = new LogWriter(file)
 
-  val offsetStorage = new File("offsets.dat")
-  val offsetManagerReader = new LogReader(offsetStorage)
-  val offsetManagerWriter = new LogWriter(offsetStorage)
+//  val offsetStorage = new File("offsets.dat")
+//  val offsetManagerReader = new LogReader(offsetStorage)
+//  val offsetManagerWriter = new LogWriter(offsetStorage)
 
-  // TODO: this should be saved to a database
+  // TODO: this should be persisted to a database
   var lastCommittedOffset = 0L
 
   def receive = {
@@ -60,7 +63,7 @@ class ConsumerHandler extends Actor with ActorLogging {
 
         case Some(CommitOffset(consumerId, offset)) =>
           log.info("Received commit from consumerId {}", consumerId)
-          lastCommittedOffset = 1+offset
+          lastCommittedOffset = 1 + offset
           sender ! Write(ProtocolFraming.encode(ServerProtocol.commitAck))
 
         case Some(Poll(consumerId)) =>
@@ -82,63 +85,15 @@ class ConsumerHandler extends Actor with ActorLogging {
 
 }
 
-sealed trait ServerProtocol
-case class Record(offset: Long, data: Array[Byte]) extends ServerProtocol {
-  override def toString: String = s"Record($offset, ${new String(data)})"
-}
-case object CommitAck extends ServerProtocol
-case object WriteAck extends ServerProtocol
-
-object ServerProtocol {
-
-  implicit val byteOrder = ByteOrder.BIG_ENDIAN
-
-  val SendDataMagic = 0.toByte
-  val CommitAckMagic = 1.toByte
-  val WriteAckMagic = 2.toByte
-
-  def record(offset: Long, data: Array[Byte]) =
-    new ByteStringBuilder()
-      .putByte(SendDataMagic)
-      .putLong(offset)
-      .putBytes(data)
-      .result()
-
-  def commitAck =
-    new ByteStringBuilder()
-      .putByte(CommitAckMagic)
-      .result()
-
-  def writeAck =
-    new ByteStringBuilder()
-      .putByte(WriteAckMagic)
-      .result()
-
-  def decode(bs: ByteString): Option[ServerProtocol] = {
-    val buffer = bs.toByteBuffer
-    val magic = buffer.get()
-
-    magic match {
-      case `SendDataMagic` =>
-        val offset = buffer.getLong()
-        val data: Array[Byte] = new Array(buffer.remaining())
-        buffer.get(data)
-        Some(Record(offset, data))
-      case `CommitAckMagic` =>
-        Some(CommitAck)
-      case `WriteAckMagic` =>
-        Some(WriteAck)
-
-      case otherwise =>
-        None
-    }
-  }
-
-}
 
 object ActorServer extends App {
 
-  val system = ActorSystem("tcp-manager")
+  val system = ActorSystem("test-system")
   system.actorOf(Props(new ActorServer))
 
+}
+
+
+object ActorTest extends App {
+  val system = ActorSystem("test-system")
 }
