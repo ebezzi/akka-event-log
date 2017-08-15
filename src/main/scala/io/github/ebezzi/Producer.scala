@@ -19,10 +19,10 @@ class Producer(implicit val system: ActorSystem) {
   implicit val timeout = Timeout(10.seconds)
   import system.dispatcher
 
-  val client = system.actorOf(ActorClient.props)
+  val client = system.actorOf(ActorClient.props())
 
   def produce(data: String) =
-    client ? Publish(data.getBytes(Charset.defaultCharset()))
+    client ? Publish("topic1", data.getBytes(Charset.defaultCharset()))
 
 }
 

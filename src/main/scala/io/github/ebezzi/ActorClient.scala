@@ -16,10 +16,12 @@ case class Commit(offset: Long) extends Message
 case class Publish(topic: String, data: Array[Byte]) extends Message
 case object Poll extends Message
 
-class ActorClient extends Actor with ActorLogging with Stash {
+// TODO: producer do not need a topic, so this can be omitted. Maybe can be done better
+class ActorClient(topic: String = "") extends Actor with ActorLogging with Stash {
 
   val remote = new InetSocketAddress("localhost", 7000)
 
+  // TODO: include this in the initial message
   val consumerId = 1337
 
   import Tcp._
@@ -37,7 +39,7 @@ class ActorClient extends Actor with ActorLogging with Stash {
 
       log.info("Registering consumer {}", consumerId)
 
-      connection ! Write(ProtocolFraming.encode(Protocol.registerConsumer(consumerId)))
+      connection ! Write(ProtocolFraming.encode(Protocol.registerConsumer(topic, consumerId)))
 
       log.info("Unstashing all")
       unstashAll()
@@ -102,7 +104,7 @@ object Protocol {
   sealed trait Protocol
 
   // Registers a consumer
-  case class RegisterConsumer(consumerId: Int) extends Protocol
+  case class RegisterConsumer(topic: String, consumerId: Int) extends Protocol
 
   // Commits the offset for consumerId `consumerId`. Will not retrieve new data
   case class CommitOffset(consumerId: Int, offset: Long) extends Protocol
@@ -119,9 +121,11 @@ object Protocol {
   val PollMagic = 2.toByte
   val PublishDataMagic = 3.toByte
 
-  def registerConsumer(consumerId: Int) =
+  def registerConsumer(topic: String, consumerId: Int) =
     new ByteStringBuilder()
       .putByte(RegisterConsumerMagic)
+      .putInt(topic.length)
+      .putBytes(topic.getBytes)
       .putInt(consumerId)
       .result()
 
@@ -152,7 +156,10 @@ object Protocol {
     val magic = buffer.get()
     magic match {
       case `RegisterConsumerMagic` =>
-        Some(RegisterConsumer(buffer.getInt()))
+        val topicSize = buffer.getInt
+        val topicDst = Array.ofDim[Byte](topicSize)
+        buffer.get(topicDst)
+        Some(RegisterConsumer(new String(topicDst), buffer.getInt()))
       case `CommitOffsetMagic` =>
         Some(CommitOffset(buffer.getInt(), buffer.getLong()))
       case `PollMagic` =>
@@ -162,7 +169,7 @@ object Protocol {
         val topicDst = Array.ofDim[Byte](topicSize)
         buffer.get(topicDst)
         val size = buffer.getInt()
-        var dst = Array.ofDim[Byte](size)
+        val dst = Array.ofDim[Byte](size)
         buffer.get(dst)
         Some(PublishData(new String(topicDst), dst))
       case otherwise => None
@@ -201,5 +208,5 @@ class JustLogActor extends Actor with ActorLogging {
 
 
 object ActorClient extends App {
-  def props = Props(new ActorClient)
+  def props(topic: String = "") = Props(new ActorClient(topic))
 }

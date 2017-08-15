@@ -18,8 +18,6 @@ class ActorServer extends Actor with ActorLogging {
   private val port =
     context.system.settings.config.getInt("server.tcp.port")
 
-  val file = "00000.dat"
-
   IO(Tcp) ! Bind(self, new InetSocketAddress("localhost", port))
 
   def receive = {
@@ -31,24 +29,36 @@ class ActorServer extends Actor with ActorLogging {
 
     case c @ Connected(remote, local) =>
       log.info("Received connection from: {}", remote)
-      val handler = context.actorOf(Props(new Handler(file)))
+      val handler = context.actorOf(Props(new Handler))
       val connection = sender()
       connection ! Register(handler)
   }
 
 }
 
-class Handler(path: String) extends Actor with ActorLogging {
+class Handler extends Actor with ActorLogging {
   import Tcp._
   import Protocol._
 
 //  val cluster = Cluster(context.system)
 
-  val file = new File(path)
-  val reader = new LogReader(file)
-  val writer = new LogWriter(file)
+  private def fileFor(topic: String) =
+    new File(s"$topic.dat")
 
-  val producer = new Producer
+  private def writerFor(topic: String) =
+    new LogWriter(fileFor(topic))
+
+  private def readerFor(topic: String) =
+    new LogReader(fileFor(topic))
+
+  var reader: LogReader = _
+  var writer: LogWriter = _
+
+//  val file = new File(path)
+//  val reader = new LogReader(file)
+//  val writer = new LogWriter(file)
+
+//  val producer = new Producer
 
   // TODO: this should be persisted to a database
   var lastCommittedOffset = 0L
@@ -57,9 +67,11 @@ class Handler(path: String) extends Actor with ActorLogging {
     case Received(data) =>
       Protocol.decode(data) match {
 
-        case Some(RegisterConsumer(consumerId)) =>
+        case Some(RegisterConsumer(topic, consumerId)) =>
           log.info("{} registered", consumerId)
-          // TODO: match the consumerId and get the right partition (for now, assume offset is 0)
+          reader = readerFor(topic)
+          writer = writerFor(topic)
+          // TODO: match the consumerId and get the right partition
 
         case Some(CommitOffset(consumerId, offset)) =>
           log.info("Received commit from consumerId {}", consumerId)
@@ -74,7 +86,7 @@ class Handler(path: String) extends Actor with ActorLogging {
 
         case Some(PublishData(topic, data)) =>
           log.info("Publishing to topic {}: {}", topic, data.length)
-          writer.append(data)
+          writerFor(topic).append(data)
           sender ! Write(ProtocolFraming.encode(ServerProtocol.writeAck))
       }
 

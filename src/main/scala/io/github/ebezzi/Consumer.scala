@@ -16,10 +16,10 @@ import akka.pattern.ask
 object Consumer extends App {
 
   implicit val system = ActorSystem("consumer")
-  val consumer = new Consumer
+  val consumer = new Consumer("00000")
   import system.log
 
-//  Thread.sleep(1000)
+  Thread.sleep(1000)
 
   while (true) {
     val record = consumer.poll()
@@ -31,14 +31,14 @@ object Consumer extends App {
 
 }
 
-class Consumer(implicit val system: ActorSystem) {
+class Consumer(topic: String)(implicit val system: ActorSystem) {
 
   implicit val timeout = Timeout(10.seconds)
   import system.dispatcher
 
   implicit val byteOrder = ByteOrder.LITTLE_ENDIAN
 
-  val client = system.actorOf(ActorClient.props)
+  val client = system.actorOf(ActorClient.props(topic))
 
   def pollAsync(): Future[Record] =
     (client ? Poll).mapTo[Record]
