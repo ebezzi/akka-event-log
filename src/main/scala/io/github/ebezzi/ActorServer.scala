@@ -18,6 +18,8 @@ class ActorServer extends Actor with ActorLogging {
   private val port =
     context.system.settings.config.getInt("server.tcp.port")
 
+  val file = "00000.dat"
+
   IO(Tcp) ! Bind(self, new InetSocketAddress("localhost", port))
 
   def receive = {
@@ -29,26 +31,24 @@ class ActorServer extends Actor with ActorLogging {
 
     case c @ Connected(remote, local) =>
       log.info("Received connection from: {}", remote)
-      val handler = context.actorOf(Props[Handler])
+      val handler = context.actorOf(Props(new Handler(file)))
       val connection = sender()
       connection ! Register(handler)
   }
 
 }
 
-class Handler extends Actor with ActorLogging {
+class Handler(path: String) extends Actor with ActorLogging {
   import Tcp._
   import Protocol._
 
-  val cluster = Cluster(context.system)
+//  val cluster = Cluster(context.system)
 
-  val file = new File("00000.dat")
+  val file = new File(path)
   val reader = new LogReader(file)
   val writer = new LogWriter(file)
 
-//  val offsetStorage = new File("offsets.dat")
-//  val offsetManagerReader = new LogReader(offsetStorage)
-//  val offsetManagerWriter = new LogWriter(offsetStorage)
+  val producer = new Producer
 
   // TODO: this should be persisted to a database
   var lastCommittedOffset = 0L
@@ -69,11 +69,11 @@ class Handler extends Actor with ActorLogging {
         case Some(Poll(consumerId)) =>
           log.info("Received poll from consumerId {}", consumerId)
           val toSend = reader.fromOffset(lastCommittedOffset)
-          log.warning("Polled record: {}", new String(toSend, "utf-8"))
+          log.warning("Polled record: {} at offset {}", new String(toSend, "utf-8"), lastCommittedOffset)
           sender ! Write(ProtocolFraming.encode(ServerProtocol.record(lastCommittedOffset, toSend)))
 
-        case Some(PublishData(data)) =>
-          log.info("Publishing: {}", data.length)
+        case Some(PublishData(topic, data)) =>
+          log.info("Publishing to topic {}: {}", topic, data.length)
           writer.append(data)
           sender ! Write(ProtocolFraming.encode(ServerProtocol.writeAck))
       }
@@ -85,12 +85,23 @@ class Handler extends Actor with ActorLogging {
 
 }
 
+//class ReplicaHandler(path: String) extends Actor with ActorLogging {
+//
+//  val file = new File(path)
+//  val reader = new LogReader(file)
+//  val writer = new LogWriter(file)
+//
+//  override def receive: Receive = {
+//
+//  }
+//
+//}
 
 object ActorServer extends App {
 
   val system = ActorSystem("test-system")
-//  system.actorOf(Props(new ActorServer))
-  system.actorOf(Props(new SimpleClusterListener))
+  system.actorOf(Props(new ActorServer))
+//  system.actorOf(Props(new SimpleClusterListener))
 
 }
 

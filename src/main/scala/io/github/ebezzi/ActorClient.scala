@@ -13,12 +13,12 @@ import akka.util.{ByteString, ByteStringBuilder}
 // These messages are supposed to be mapped to function calls (to hide the actor behind it)
 sealed trait Message
 case class Commit(offset: Long) extends Message
-case class Publish(data: Array[Byte]) extends Message
+case class Publish(topic: String, data: Array[Byte]) extends Message
 case object Poll extends Message
 
 class ActorClient extends Actor with ActorLogging with Stash {
 
-  val remote = new InetSocketAddress("localhost", 7777)
+  val remote = new InetSocketAddress("localhost", 7000)
 
   val consumerId = 1337
 
@@ -59,9 +59,9 @@ class ActorClient extends Actor with ActorLogging with Stash {
       connection ! Write(ProtocolFraming.encode(Protocol.poll(consumerId)))
       context become waitingForResponse(connection, sender)
 
-    case Publish(data) =>
-      log.info("Publishing {} bytes", data.length)
-      connection ! Write(ProtocolFraming.encode(Protocol.publishData(data)))
+    case Publish(topic, data) =>
+      log.info("Publishing {} bytes to topic {}", data.length, topic)
+      connection ! Write(ProtocolFraming.encode(Protocol.publishData(topic, data)))
       context become waitingForResponse(connection, sender)
 
     case CommandFailed(w: Write) =>
@@ -110,7 +110,7 @@ object Protocol {
   // Polls for the next record(s). TODO: for now we use only one record at a time
   case class Poll(consumerId: Int) extends Protocol
 
-  case class PublishData(data: Array[Byte]) extends Protocol
+  case class PublishData(topic: String, data: Array[Byte]) extends Protocol
 
   implicit val byteOrder = ByteOrder.BIG_ENDIAN
 
@@ -138,9 +138,11 @@ object Protocol {
       .putInt(consumerId)
       .result()
 
-  def publishData(data: Array[Byte]) =
+  def publishData(topic: String, data: Array[Byte]) =
     new ByteStringBuilder()
       .putByte(PublishDataMagic)
+      .putInt(topic.length)
+      .putBytes(topic.getBytes)
       .putInt(data.length)
       .putBytes(data)
       .result()
@@ -156,10 +158,13 @@ object Protocol {
       case `PollMagic` =>
         Some(Poll(buffer.getInt()))
       case `PublishDataMagic` =>
+        val topicSize = buffer.getInt
+        val topicDst = Array.ofDim[Byte](topicSize)
+        buffer.get(topicDst)
         val size = buffer.getInt()
         var dst = Array.ofDim[Byte](size)
         buffer.get(dst)
-        Some(PublishData(dst))
+        Some(PublishData(new String(topicDst), dst))
       case otherwise => None
     }
   }
