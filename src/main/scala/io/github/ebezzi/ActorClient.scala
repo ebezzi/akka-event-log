@@ -15,9 +15,10 @@ sealed trait Message
 case class Commit(offset: Long) extends Message
 case class Publish(topic: String, data: Array[Byte]) extends Message
 case object Poll extends Message
+case object GetAll extends Message
 
 // TODO: producer do not need a topic, so this can be omitted. Maybe can be done better
-class ActorClient(topic: String = "") extends Actor with ActorLogging with Stash {
+class ActorClient(topic: String) extends Actor with ActorLogging with Stash {
 
   val remote = new InetSocketAddress("localhost", 7000)
 
@@ -37,7 +38,9 @@ class ActorClient(topic: String = "") extends Actor with ActorLogging with Stash
       val connection = sender()
       connection ! Register(self)
 
-      log.info("Registering consumer {}", consumerId)
+      log.info("Registering consumer {} for topic {}", consumerId, topic)
+
+      println(ProtocolFraming.decode(ProtocolFraming.encode(Protocol.registerConsumer(topic, consumerId))))
 
       connection ! Write(ProtocolFraming.encode(Protocol.registerConsumer(topic, consumerId)))
 
@@ -59,6 +62,10 @@ class ActorClient(topic: String = "") extends Actor with ActorLogging with Stash
 
     case Poll =>
       connection ! Write(ProtocolFraming.encode(Protocol.poll(consumerId)))
+      context become waitingForResponse(connection, sender)
+
+    case GetAll =>
+      connection ! Write(ProtocolFraming.encode(Protocol.getAll))
       context become waitingForResponse(connection, sender)
 
     case Publish(topic, data) =>
@@ -114,12 +121,15 @@ object Protocol {
 
   case class PublishData(topic: String, data: Array[Byte]) extends Protocol
 
+  case object GetAllElements extends Protocol
+
   implicit val byteOrder = ByteOrder.BIG_ENDIAN
 
   val RegisterConsumerMagic = 0.toByte
   val CommitOffsetMagic = 1.toByte
   val PollMagic = 2.toByte
   val PublishDataMagic = 3.toByte
+  val GetAllMagic = 4.toByte
 
   def registerConsumer(topic: String, consumerId: Int) =
     new ByteStringBuilder()
@@ -142,6 +152,11 @@ object Protocol {
       .putInt(consumerId)
       .result()
 
+  def getAll =
+    new ByteStringBuilder()
+      .putByte(GetAllMagic)
+      .result()
+
   def publishData(topic: String, data: Array[Byte]) =
     new ByteStringBuilder()
       .putByte(PublishDataMagic)
@@ -156,7 +171,7 @@ object Protocol {
     val magic = buffer.get()
     magic match {
       case `RegisterConsumerMagic` =>
-        val topicSize = buffer.getInt
+        val topicSize = buffer.getInt()
         val topicDst = Array.ofDim[Byte](topicSize)
         buffer.get(topicDst)
         Some(RegisterConsumer(new String(topicDst), buffer.getInt()))
@@ -172,7 +187,10 @@ object Protocol {
         val dst = Array.ofDim[Byte](size)
         buffer.get(dst)
         Some(PublishData(new String(topicDst), dst))
-      case otherwise => None
+      case `GetAllMagic` =>
+        Some(GetAllElements)
+      case otherwise =>
+        None
     }
   }
 

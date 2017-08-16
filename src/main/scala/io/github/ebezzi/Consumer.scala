@@ -36,15 +36,20 @@ class Consumer(topic: String)(implicit val system: ActorSystem) {
   implicit val timeout = Timeout(10.seconds)
   import system.dispatcher
 
-  implicit val byteOrder = ByteOrder.LITTLE_ENDIAN
+//  implicit val byteOrder = ByteOrder.LITTLE_ENDIAN
 
-  val client = system.actorOf(ActorClient.props(topic))
+  private val client = system.actorOf(ActorClient.props(topic))
 
   def pollAsync(): Future[Record] =
     (client ? Poll).mapTo[Record]
 
   def poll(): Record =
     Await.result((client ? Poll).mapTo[Record], 10.seconds)
+
+  // TODO: we need a more powerful method to get the offset
+  def lastValue(): Record =
+    Await.result((client ? GetAll).mapTo[Record], 10.seconds)
+
 
   def commit(record: Record): Unit =
     if (record.data.isEmpty) () else Await.result(client ? Commit(record.offset), 10.seconds)

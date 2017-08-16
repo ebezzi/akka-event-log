@@ -7,8 +7,10 @@ import java.nio.file.Paths
 
 import akka.actor.ActorSystem
 import akka.stream.{ActorMaterializer, IOResult}
+import io.github.ebezzi.LogReader.reader
 
 import scala.annotation.tailrec
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
 import scala.util.Random
 
@@ -129,6 +131,10 @@ final class LogReader(file: File) {
 
   }
 
+  // To be used on compacted records
+  def readAll(): Iterable[Array[Byte]] =
+    Stream.continually(next()).takeWhile(_.nonEmpty).toIterable
+
   def close() = {
     channel.close()
     raf.close()
@@ -167,13 +173,8 @@ object LogReader extends App {
   def printByteArray(ba: Array[Byte]) =
     println(s"ByteArray size:${ba.length} content: ${new String(ba)}")
 
-  printByteArray(reader.next())
-  printByteArray(reader.next())
-  printByteArray(reader.next())
-  printByteArray(reader.next())
-  printByteArray(reader.next())
-  printByteArray(reader.next())
-  printByteArray(reader.next())
-  printByteArray(reader.next())
+
+  Stream.continually(reader.next()).takeWhile(_.nonEmpty).toList.map(printByteArray)
+
 
 }

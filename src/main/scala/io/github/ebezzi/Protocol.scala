@@ -51,7 +51,6 @@ object ServerProtocol {
         Some(CommitAck)
       case `WriteAckMagic` =>
         Some(WriteAck)
-
       case otherwise =>
         None
     }
