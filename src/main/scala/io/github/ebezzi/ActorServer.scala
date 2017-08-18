@@ -12,7 +12,6 @@ import akka.util.{ByteString, ByteStringBuilder}
 
 class ActorServer extends Actor with ActorLogging {
 
-  import Tcp._
   import context.system
 
   private val port =
@@ -29,14 +28,14 @@ class ActorServer extends Actor with ActorLogging {
 
     case c@Connected(remote, local) =>
       log.info("Received connection from: {}", remote)
-      val handler = context.actorOf(Props(new Handler))
+      val coordinator = context.actorOf(Props(new Coordinator))
       val connection = sender()
-      connection ! Register(handler)
+      connection ! Register(coordinator)
   }
 
 }
 
-class Handler extends Actor with ActorLogging {
+class Coordinator extends Actor with ActorLogging {
 
   import Tcp._
   import Protocol._
@@ -60,15 +59,14 @@ class Handler extends Actor with ActorLogging {
   // TODO: we need a more complex structure
   var producer: Producer = _
 
-  // TODO: this should be persisted to a database
-  var lastCommittedOffset = 0L
+  // Will be fetched when a consumer is registered
+  var lastCommittedOffset: Long = _
 
   def receive = {
-    case r@Received(data) =>
+    case Received(data) =>
       Protocol.decode(data) match {
 
         case Some(RegisterConsumer(topic, consumerId)) =>
-          println("### " + r.data)
           log.info("{} registered for topic {}", consumerId, topic)
           reader = readerFor(topic)
           writer = writerFor(topic)
@@ -80,7 +78,6 @@ class Handler extends Actor with ActorLogging {
             log.info("Recovering from offset {}", lv)
             lastCommittedOffset = lv
           }
-
 
         case Some(CommitOffset(consumerId, offset)) =>
           log.info("Received commit from consumerId {}", consumerId)

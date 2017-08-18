@@ -36,8 +36,6 @@ class Consumer(topic: String)(implicit val system: ActorSystem) {
   implicit val timeout = Timeout(10.seconds)
   import system.dispatcher
 
-//  implicit val byteOrder = ByteOrder.LITTLE_ENDIAN
-
   private val client = system.actorOf(ActorClient.props(topic))
 
   def pollAsync(): Future[Record] =
