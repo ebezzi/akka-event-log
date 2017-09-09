@@ -13,7 +13,7 @@ import akka.util.{ByteString, ByteStringBuilder}
 // TODO: producer do not need a topic, so this can be omitted. Maybe can be done better
 class ActorClientProducer extends Actor with ActorLogging with Stash {
 
-  val remote = new InetSocketAddress("localhost", 7000)
+  val remote = new InetSocketAddress("localhost", 7001)
 
   import Tcp._
   import context.system
@@ -28,6 +28,7 @@ class ActorClientProducer extends Actor with ActorLogging with Stash {
       val connection = sender()
       connection ! Register(self)
       context become connected(connection)
+      unstashAll()
 
     case other =>
       log.info("Stashing {}", other)

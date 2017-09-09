@@ -19,12 +19,8 @@ class ActorServer extends Actor with ActorLogging {
 
   IO(Tcp) ! Bind(self, new InetSocketAddress("localhost", port))
 
-  private val topics = new File(system.settings.config.getString("server.data-dir") + "/.")
-    .listFiles
-    .filter(_.getName.endsWith(".dat"))
-    .map(_.getName)
-    .map(_.dropRight(4))
-    .toList
+  // A single instance for each node, please
+  val manager = new TopicManager(context.system)
 
   def receive = {
     case b@Bound(localAddress) =>
@@ -35,7 +31,7 @@ class ActorServer extends Actor with ActorLogging {
 
     case Connected(remote, local) =>
       log.info("Received connection from: {}", remote)
-      val coordinator = context.actorOf(Props(new ConnectionHandler))
+      val coordinator = context.actorOf(Props(new Coordinator(manager)))
       val connection = sender()
       connection ! Register(coordinator)
   }
@@ -46,7 +42,6 @@ object ActorServer extends App {
 
   val system = ActorSystem("test-system")
   system.actorOf(Props(new ActorServer), "server")
-  //  system.actorOf(Props(new SimpleClusterListener))
 
 }
 

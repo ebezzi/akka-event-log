@@ -11,7 +11,7 @@ import akka.io.Tcp._
 // which node contains a determined topic/partition. If a new topic/partition is encountered, we send a request
 // to create one on a random node.
 // The connection handler needs to keep track of the offset for each consumerId (i.e. each connection).
-class ConnectionHandler extends Actor with ActorLogging {
+class Coordinator(topicManager: TopicManager) extends Actor with ActorLogging {
 
   import Protocol._
   import context.{system, dispatcher}
@@ -22,7 +22,6 @@ class ConnectionHandler extends Actor with ActorLogging {
   // TODO: we need a more complex structure
   var producer: Producer = _
 
-  val topicManager = new TopicManager(cluster)
   var topic: String = _
 
   // Will be fetched when a consumer is registered
@@ -35,7 +34,7 @@ class ConnectionHandler extends Actor with ActorLogging {
         // If a consumer is registered, we need to find the location of the topic
         case Some(rc @ RegisterConsumer(requestedTopic, consumerId)) =>
           log.info("{} registered for topic {}", consumerId, requestedTopic)
-          producer = new Producer
+//          producer = new Producer
           // send the registration message to the leader
           // TODO: if you can't register a consumer, you should nack this
           topic = requestedTopic
