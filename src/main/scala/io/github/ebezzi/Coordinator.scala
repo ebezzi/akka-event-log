@@ -7,6 +7,10 @@ import akka.actor.{Actor, ActorLogging}
 import akka.cluster.Cluster
 import akka.io.Tcp._
 
+import scala.concurrent.duration._
+import akka.pattern.{ask, pipe}
+import akka.util.Timeout
+
 // The connection handler handles incoming connections. It needs to know the cluster topology, in particular
 // which node contains a determined topic/partition. If a new topic/partition is encountered, we send a request
 // to create one on a random node.
@@ -17,6 +21,7 @@ class Coordinator(topicManager: TopicManager) extends Actor with ActorLogging {
   import context.{system, dispatcher}
 
   val cluster = Cluster(context.system)
+  implicit val timeout = Timeout(10.seconds)
 
   // This is for writing offsets
   // TODO: we need a more complex structure
@@ -71,10 +76,11 @@ class Coordinator(topicManager: TopicManager) extends Actor with ActorLogging {
 
         // Find the location of the topic, write to it
         case Some(pd @ PublishData(topic, _)) =>
-//          log.info("Publishing to topic {}: {}", topic, data.length)
+          log.info("Publishing to topic {} (address {}): {}", topic,
+            topicManager.leaderForTopic(topic), data.length)
 //          writerFor(topic).append(data)
 //          sender ! Write(ProtocolFraming.encode(ServerProtocol.writeAck))
-          topicManager.leaderForTopic(topic) forward pd
+          topicManager.leaderForTopic(topic) ? pd map { case LeaderResponse(m) => m } pipeTo sender
       }
 
     case PeerClosed =>

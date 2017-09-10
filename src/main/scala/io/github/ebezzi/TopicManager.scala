@@ -43,34 +43,28 @@ class TopicManager(system: ActorSystem) {
     val maybeAddress = Await.result(actor ? GetLeaderAddress(topic), 10.seconds)
     maybeAddress match {
       case Some(address) =>
-        system.actorSelection(s"$address/user/partitions/$topic")
+        system.actorSelection(s"$address/user/server/$topic")
       case None =>
         val members = Cluster(system).state.members
         val chosenMember = members.toIndexedSeq(topic.hashCode % members.size)
-        system.actorSelection(s"$chosenMember/user/partitions/$topic")
+        system.actorSelection(s"$chosenMember/user/server/$topic")
     }
   }
 
   def registerTopic(topic: String, location: ActorRef) =
     actor ! RegisterTopic(topic, Cluster(system).selfAddress.toString)
 
-  def bootstrap() = {
 
-    val topics = new File(system.settings.config.getString("server.data-dir") + "/.")
-      .listFiles
-      .filter(_.getName.endsWith(".dat"))
-      .map(_.getName)
-      .map(_.dropRight(4))
-      .toList
+  val topics = new File(system.settings.config.getString("server.data-dir") + "/.")
+    .listFiles
+    .filter(_.getName.endsWith(".dat"))
+    .map(_.getName)
+    .map(_.dropRight(4))
+    .toList
 
-    println(topics)
-
-    for (topic <- topics)
-      actor ! RegisterTopic(topic, Cluster(system).selfAddress.toString)
-
-  }
-
-  bootstrap()
+  // Register the topics to propagate the state to all nodes
+  for (topic <- topics)
+    actor ! RegisterTopic(topic, Cluster(system).selfAddress.toString)
 
 }
 

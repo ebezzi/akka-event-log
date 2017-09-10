@@ -40,7 +40,7 @@ object Producer extends App {
   val producer = new Producer
 
 //  system.scheduler.schedule(0.seconds, 1.seconds) {
-  producer.produce("00000", s"Message produced at ${System.currentTimeMillis}")
+  producer.produce("00002", s"Message produced at ${System.currentTimeMillis}")
 //  }
 //
 //  producer.send("ciao a tutti".getBytes).map(_.decodeString("utf-8")).foreach { resp =>

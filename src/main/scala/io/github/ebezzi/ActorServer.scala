@@ -22,7 +22,15 @@ class ActorServer extends Actor with ActorLogging {
   // A single instance for each node, please
   val manager = new TopicManager(context.system)
 
+  // Start a partition leader for each topic(partition) found on this node
+  for (topic <- manager.topics) {
+    context.actorOf(Props(new PartitionLeader), topic)
+  }
+
+  // Listens on incoming connections. Might want to delay this unless the node is ready (e.g. has topics data, etc.)
+  // by using a state machine
   def receive = {
+
     case b@Bound(localAddress) =>
       log.info("Bound to address: {}", b)
 
