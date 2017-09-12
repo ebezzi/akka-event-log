@@ -12,7 +12,7 @@ import akka.util.{ByteString, ByteStringBuilder}
 
 class ActorClientProducer extends Actor with ActorLogging with Stash {
 
-  val remote = new InetSocketAddress("localhost", 7000)
+  val remote = new InetSocketAddress("localhost", 7001)
 
   import Tcp._
   import context.system
@@ -46,7 +46,6 @@ class ActorClientProducer extends Actor with ActorLogging with Stash {
       // TODO: analyze this case according to the docs
 
     case _: ConnectionClosed =>
-      //          listener ! "connection closed"
       context stop self
 
     case other =>
