@@ -10,10 +10,9 @@ import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Source
 import akka.util.{ByteString, ByteStringBuilder}
 
-// TODO: producer do not need a topic, so this can be omitted. Maybe can be done better
 class ActorClientProducer extends Actor with ActorLogging with Stash {
 
-  val remote = new InetSocketAddress("localhost", 7001)
+  val remote = new InetSocketAddress("localhost", 7000)
 
   import Tcp._
   import context.system

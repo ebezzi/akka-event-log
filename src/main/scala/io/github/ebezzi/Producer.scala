@@ -12,6 +12,7 @@ import io.github.ebezzi.Producer.system
 import scala.concurrent.duration._
 import scala.concurrent.Future
 import akka.pattern.ask
+import com.typesafe.config.ConfigFactory
 
 
 class Producer(implicit val system: ActorSystem) {
@@ -32,7 +33,7 @@ class Producer(implicit val system: ActorSystem) {
 
 object Producer extends App {
 
-  implicit val system = ActorSystem("producer")
+  implicit val system = ActorSystem("producer", ConfigFactory.load().getConfig("clients"))
   implicit val mat = ActorMaterializer()
 
   import system.dispatcher
@@ -40,7 +41,7 @@ object Producer extends App {
   val producer = new Producer
 
 //  system.scheduler.schedule(0.seconds, 1.seconds) {
-  producer.produce("00002", s"Message produced at ${System.currentTimeMillis}")
+  producer.produce("00000", s"Message produced at ${System.currentTimeMillis}")
 //  }
 //
 //  producer.send("ciao a tutti".getBytes).map(_.decodeString("utf-8")).foreach { resp =>

@@ -12,14 +12,13 @@ import akka.util.{ByteString, ByteStringBuilder, Timeout}
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import akka.pattern.ask
+import com.typesafe.config.ConfigFactory
 
 object Consumer extends App {
 
-  implicit val system = ActorSystem("consumer")
+  implicit val system = ActorSystem("consumer", ConfigFactory.load().getConfig("clients"))
   val consumer = new Consumer("00000")
   import system.log
-
-  Thread.sleep(1000)
 
   while (true) {
     val record = consumer.poll()
@@ -28,6 +27,9 @@ object Consumer extends App {
     consumer.commit(record)
     Thread.sleep(100)
   }
+
+//  val record = consumer.poll()
+//  log.info("Consumed record: {}", record)
 
 }
 

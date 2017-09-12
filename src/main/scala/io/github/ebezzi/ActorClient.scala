@@ -5,6 +5,7 @@ import java.nio.ByteOrder
 
 import akka.actor.Actor.Receive
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, Stash}
+import akka.event.{Logging, LoggingReceive}
 import akka.io.{IO, Tcp}
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Source
@@ -20,7 +21,7 @@ case object GetAll extends Message
 // TODO: producer do not need a topic, so this can be omitted. Maybe can be done better
 class ActorClient(topic: String) extends Actor with ActorLogging with Stash {
 
-  val remote = new InetSocketAddress("localhost", 7000)
+  val remote = new InetSocketAddress("localhost", 7001)
 
   // TODO: include this in the initial message
   val consumerId = 1337
@@ -40,14 +41,14 @@ class ActorClient(topic: String) extends Actor with ActorLogging with Stash {
 
       log.info("Registering consumer {} for topic {}", consumerId, topic)
 
-      println(ProtocolFraming.decode(ProtocolFraming.encode(Protocol.registerConsumer(topic, consumerId))))
-
+      // TODO: Add a timeout for failed consumer registration
       connection ! Write(ProtocolFraming.encode(Protocol.registerConsumer(topic, consumerId)))
-
-      log.info("Unstashing all")
-      unstashAll()
-
-      context become connected(connection)
+      context.become({
+        case Received(data) =>
+          log.info("Consumer successfully registered, unstashing messages")
+          unstashAll()
+          context become connected(connection)
+      })
 
     case other =>
       log.info("Stashing {}", other)
@@ -85,7 +86,7 @@ class ActorClient(topic: String) extends Actor with ActorLogging with Stash {
       log.warning(s"Received unexpected $other")
   }
 
-  def waitingForResponse(connection: ActorRef, requestor: ActorRef): Receive = {
+  def waitingForResponse(connection: ActorRef, requestor: ActorRef) = LoggingReceive(Logging.DebugLevel) {
     case Received(data) =>
       log.debug("Received {}", data.decodeString("utf-8"))
       ServerProtocol.decode(data) match {

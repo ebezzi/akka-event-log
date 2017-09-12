@@ -11,6 +11,7 @@ case class Record(offset: Long, data: Array[Byte]) extends ServerProtocol {
 }
 case object CommitAck extends ServerProtocol
 case object WriteAck extends ServerProtocol
+case object RegisterAck extends ServerProtocol
 
 object ServerProtocol {
 
@@ -19,6 +20,7 @@ object ServerProtocol {
   val SendDataMagic = 0.toByte
   val CommitAckMagic = 1.toByte
   val WriteAckMagic = 2.toByte
+  val RegisterAckMagic = 3.toByte
 
   def record(offset: Long, data: Array[Byte]) =
     new ByteStringBuilder()
@@ -37,6 +39,11 @@ object ServerProtocol {
       .putByte(WriteAckMagic)
       .result()
 
+  def registerAck =
+    new ByteStringBuilder()
+      .putByte(RegisterAckMagic)
+      .result()
+
   def decode(bs: ByteString): Option[ServerProtocol] = {
     val buffer = bs.toByteBuffer
     val magic = buffer.get()
@@ -51,6 +58,8 @@ object ServerProtocol {
         Some(CommitAck)
       case `WriteAckMagic` =>
         Some(WriteAck)
+      case `RegisterAckMagic` =>
+        Some(RegisterAck)
       case otherwise =>
         None
     }

@@ -132,8 +132,10 @@ final class LogReader(file: File) {
   }
 
   // To be used on compacted records
-  def readAll(): Iterable[Array[Byte]] =
+  def readAll(): Iterable[Array[Byte]] = {
+    position = 0L
     Stream.continually(next()).takeWhile(_.nonEmpty).toIterable
+  }
 
   def close() = {
     channel.close()

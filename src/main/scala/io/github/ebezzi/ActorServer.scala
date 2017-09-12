@@ -24,7 +24,7 @@ class ActorServer extends Actor with ActorLogging {
 
   // Start a partition leader for each topic(partition) found on this node
   for (topic <- manager.topics) {
-    context.actorOf(Props(new PartitionLeader), topic)
+    context.actorOf(Props(new PartitionLeader(topic)), topic)
   }
 
   // Listens on incoming connections. Might want to delay this unless the node is ready (e.g. has topics data, etc.)
