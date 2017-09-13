@@ -14,8 +14,9 @@ Next steps
 -------------------------
 
 - Support replication.
-- Support partitioning. Right now a topic has only one partition.
-- Create configurable utilities to produce and consume.
-- Create metadata for topics (right now topic information is stored using a CRDT. This means that as long as one node is up, topics metadata will be fine. But if all nodes die and only a part of them are restarted, you might lose information about some topics).
+- Support partitioning. Right now topics can have only one partition.
+- Create configurable utilities to produce and consume data.
+- Handle cluster-related scenarios (split brain, node failures, etc).
+- Create persistent metadata for topics (right now topic information is stored using a CRDT. This means that as long as one node is up, topics metadata will be fine. But if all nodes die and only a part of them are restarted, you might lose information about some topics).
 - Support multiple topics.
 - Support indexing of single entities.
