@@ -28,8 +28,6 @@ object Consumer extends App {
     Thread.sleep(100)
   }
 
-//  val record = consumer.poll()
-//  log.info("Consumed record: {}", record)
 
 }
 

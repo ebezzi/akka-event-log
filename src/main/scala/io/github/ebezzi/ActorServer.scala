@@ -46,14 +46,10 @@ class ActorServer extends Actor with ActorLogging {
 
 }
 
+// Application entry point
 object ActorServer extends App {
 
   val system = ActorSystem("test-system")
   system.actorOf(Props(new ActorServer), "server")
 
-}
-
-
-object ActorTest extends App {
-  val system = ActorSystem("test-system")
 }

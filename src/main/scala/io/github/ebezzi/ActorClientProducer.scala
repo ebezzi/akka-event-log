@@ -38,7 +38,7 @@ class ActorClientProducer extends Actor with ActorLogging with Stash {
 
     case Publish(topic, data) =>
       log.info("Publishing {} bytes to topic {}", data.length, topic)
-      connection ! Write(ProtocolFraming.encode(Protocol.publishData(topic, data)))
+      connection ! Write(ProtocolFraming.encode(ClientProtocol.publishData(topic, data)))
       context become waitingForResponse(connection, sender)
 
     case CommandFailed(w: Write) =>

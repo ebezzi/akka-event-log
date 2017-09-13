@@ -144,29 +144,21 @@ final class LogReader(file: File) {
 
 }
 
+// Only for debugging
 object LogWriter extends App {
 
   val file = new File("00000.dat")
   val writer = new LogWriter(file)
 
-//  file.delete()
-//  file.createNewFile()
-
-  val phrases = Seq("ciao a tutti", "da emanuele bezzi", "nato a milano nel 1985", "lavora in DATABIZ")
-
-//  writer.append("ciao a tutti".getBytes)
-//  writer.append("da emanuele bezzi".getBytes)
-//  writer.append("nato a milano nel 1985".getBytes)
-//  writer.append("lavora in DATABIZ".getBytes)
+  val phrases = Seq("phrase 1", "phrase 2", "phrase 3")
 
   writer.append(Random.shuffle(phrases).head.getBytes)
 
   writer.close()
 
-
 }
 
-
+// Only for debugging
 object LogReader extends App {
 
   val file = new File("00000.dat")
@@ -175,8 +167,6 @@ object LogReader extends App {
   def printByteArray(ba: Array[Byte]) =
     println(s"ByteArray size:${ba.length} content: ${new String(ba)}")
 
-
   Stream.continually(reader.next()).takeWhile(_.nonEmpty).toList.map(printByteArray)
-
 
 }

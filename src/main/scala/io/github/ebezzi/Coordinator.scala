@@ -19,7 +19,7 @@ import scala.concurrent.Await
 // The connection handler needs to keep track of the offset for each consumerId (i.e. each connection).
 class Coordinator(topicManager: TopicManager) extends Actor with ActorLogging {
 
-  import Protocol._
+  import ClientProtocol._
   import context.{system, dispatcher}
 
   val cluster = Cluster(context.system)
@@ -36,7 +36,7 @@ class Coordinator(topicManager: TopicManager) extends Actor with ActorLogging {
 
   def receive = {
     case Received(data) =>
-      Protocol.decode(data) match {
+      ClientProtocol.decode(data) match {
 
         // This is just used to store the offset for this coordinator
         // This is not necessarily the best choice, but it's ok for now

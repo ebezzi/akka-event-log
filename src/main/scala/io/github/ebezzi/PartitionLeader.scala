@@ -16,7 +16,7 @@ case object LeaderGetAllElements
 
 class PartitionLeader(topic: String) extends Actor with ActorLogging {
 
-  import Protocol._
+  import ClientProtocol._
   import context.{system, dispatcher}
 
   //  val cluster = Cluster(context.system)
