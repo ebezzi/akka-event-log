@@ -3,6 +3,8 @@ Akka Event Log
 
 A distributed commit log, inspired by Apache Kafka. It uses Akka Cluster to manage communication between nodes. Its goal is to support an event based stream, than can be replayed as a whole or entity by entity.
 
+NOTE: This is by no means a complete project, neither I plan to complete it anytime soon.
+
 How to run it
 -------------------------
 
