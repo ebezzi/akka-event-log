@@ -1,4 +1,4 @@
-name := """akka-distributed-log"""
+name := """akka-event-log"""
 
 version := "1.0"
 
